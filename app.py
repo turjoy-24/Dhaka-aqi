@@ -111,6 +111,13 @@ with tab4:
         c1.metric("Today's PM2.5 (avg)", f"{today_pm:.1f}", p.aqi_category(today_pm), delta_color="off")
         c2.metric("Tomorrow's PM2.5 (predicted)", f"{tomorrow_pm:.1f}",
                   p.aqi_category(tomorrow_pm), delta_color="off")
+        low = tomorrow_pm * (1 + metrics["range_low"])
+        high = tomorrow_pm * (1 + metrics["range_high"])
+        st.write(f"**Expected range for tomorrow: {low:.0f} to {high:.0f} µg/m³**")
+        st.caption(
+            "The range comes from the model's past errors: about 80% of the time the "
+            "actual value fell inside a range like this. It is not a guarantee."
+        )
         st.caption("Learning project, not an official forecast or health advice.")
     except Exception as e:
         st.warning(f"Could not make a forecast right now: {e}")

@@ -85,7 +85,14 @@ def train_and_evaluate(d, train_frac=0.8):
     base_err = (test["target"] - test["pm2_5"]).abs()  # "tomorrow = today"
     model_err = (test["target"] - pred).abs()
 
+    # Prediction range: 10th and 90th percentile of the relative error
+    # (actual / predicted - 1) on the test period.
+    rel = test["target"] / pred - 1
+    range_low, range_high = rel.quantile(0.1), rel.quantile(0.9)
+
     metrics = {
+        "range_low": float(range_low),
+        "range_high": float(range_high),
         "train_days": len(train),
         "test_days": len(test),
         "baseline_mae": base_err.mean(),
