@@ -1,4 +1,5 @@
 # Dhaka Air Quality (PM2.5) Analysis and Next-Day Forecast
+Live dashboard: https://dhaka-aqi-qjtzqybfzwndapppzv227xz.streamlit.app
 
 A learning project that collects hourly air quality and weather data for Dhaka, explores how weather relates to pollution, and builds a model that predicts **tomorrow's average PM2.5**. A Streamlit dashboard shows the results.
 
