@@ -49,6 +49,7 @@ To check the result does not depend on one test year, I trained on all earlier d
 | Average | | | 9.2 | 8.2 | 8.4 |
 
 Both models beat the baseline in every fold. On average the improvement is about 9-11%, smaller than the single-split numbers above. Linear Regression was better on average; Random Forest was better only in the last fold, which had the most training data. The 2026 fold has no Oct-Dec data.
+The dashboard also shows an expected range for tomorrow (10th to 90th percentile of past relative errors, about -30% to +24%). In a check where the range was built from 2025 errors and tested on 2026, about 82% of actual values fell inside it (89% in Jan-Mar, 79% in Apr-Sep).
 
 ## Limitations
 
