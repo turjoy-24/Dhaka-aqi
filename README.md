@@ -1,4 +1,4 @@
-# Dhaka Air Quality (PM2.5) Analysis and Next-Day Forecast
+ Dhaka Air Quality (PM2.5) Analysis and Next-Day Forecast
 Live dashboard: https://dhaka-aqi-qjtzqybfzwndapppzv227xz.streamlit.app
 
 A learning project that collects hourly air quality and weather data for Dhaka, explores how weather relates to pollution, and builds a model that predicts **tomorrow's average PM2.5**. A Streamlit dashboard shows the results.
@@ -13,7 +13,7 @@ A learning project that collects hourly air quality and weather data for Dhaka, 
 
 ## What I did, step by step
 
-1. **Collected** hourly air quality and weather from two APIs and merged them on timestamp. There were no missing values in this model-based data.
+1. Collected hourly air quality and weather from two APIs and merged them on timestamp. There were no missing values in this model-based data.
 2. **Explored one month (September 2026).** Daily PM2.5 ranged from about 10 to 64 µg/m³ and moved in waves rather than staying flat.
 3. **Checked weather relationships** on those 30 days. PM2.5 correlated negatively with wind speed (-0.62) and rainfall (-0.55). Wind and rain are themselves correlated (0.61), so their effects cannot be separated from this alone, and 30 days is a small sample.
 4. **Built a baseline:** "tomorrow = today". Any model has to beat it.
@@ -37,6 +37,18 @@ A learning project that collects hourly air quality and weather data for Dhaka, 
 - "Tomorrow = today" is a strong baseline. Models beat it by about 18-21%, and by more in winter.
 - Today's PM2.5 carries most of the signal; weather adds a smaller improvement.
 - A simpler model was as good as a more complex one. XGBoost did not clearly beat Random Forest.
+- ### Walk-forward validation
+
+To check the result does not depend on one test year, I trained on all earlier data and tested on the next year, three times (MAE in µg/m³, lower is better):
+
+| Test year | Train days | Test days | Baseline | Linear | Random Forest |
+|---|---|---|---|---|---|
+| 2024 | 480 | 366 | 9.0 | 8.3 | 8.9 |
+| 2025 | 846 | 365 | 10.0 | 8.9 | 9.4 |
+| 2026 (Jan-Sep) | 1211 | 272 | 8.7 | 7.3 | 6.9 |
+| Average | | | 9.2 | 8.2 | 8.4 |
+
+Both models beat the baseline in every fold. On average the improvement is about 9-11%, smaller than the single-split numbers above. Linear Regression was better on average; Random Forest was better only in the last fold, which had the most training data. The 2026 fold has no Oct-Dec data.
 
 ## Limitations
 
