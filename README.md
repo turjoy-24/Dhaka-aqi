@@ -25,7 +25,19 @@ Today's weather + PM2.5	8.2	8.4	8.7
 + ## CAMS vs a ground sensor
 
 I compared the Open-Meteo (CAMS) PM2.5 used in this project with the PM2.5 monitor "Dhaka" on OpenAQ (AirNow provider), using 840 days between Sep 2022 and Mar 2025 (days with at least 18 valid hours).
+ CAMS vs ground sensors
 
+The PM2.5 used in this project comes from Open-Meteo (CAMS model estimates). I compared it with three PM2.5 monitors on OpenAQ, using days with at least 18 valid hourly readings. Each row uses its own period, so averages are not comparable across rows.
+
+| Sensor | Period | Common days | Daily correlation | Avg sensor | Avg CAMS | Bias (CAMS - sensor) |
+|---|---|---|---|---|---|---|
+| "Dhaka" (AirNow monitor) | Sep 2022 - Mar 2025 | 840 | 0.79 | 104 | 50 | -54 |
+| Jahangirnagar University (AirGradient) | Oct 2024 - Sep 2026 | 336 | 0.83 | 122 | 58 | -64 |
+| Uttara (AirGradient) | Dec 2025 - Sep 2026 | 294 | 0.87 | 93 | 47 | -46 |
+
+All values in µg/m³. CAMS follows the ups and downs of all three sensors (correlation 0.79-0.87) but reports roughly half the level. The sensor/CAMS ratio ranges from about 1.3x to 2.7x depending on month and sensor, and is highest in Dec-Feb. The forecast errors in this README are measured against CAMS, not against ground sensors, and the AQI categories in the dashboard are based on CAMS values, so they likely understate real pollution.
+
+Caveats: the sensors are in different parts of the city (and Jahangirnagar is in Savar), CAMS averages over a large grid cell, the two AirGradient devices are low-cost and were not calibrated here, and the Jahangirnagar data has gaps.
 | Measure | Value |
 |---|---|
 | Daily correlation | 0.79 |
