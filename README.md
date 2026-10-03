@@ -1,10 +1,10 @@
- Dhaka Air Quality (PM2.5): Analysis and 1/3/7-Day Forecast
+ # Dhaka Air Quality (PM2.5): Analysis and 1/3/7-Day Forecast
 
 **Live dashboard:** https://dhaka-aqi-qjtzqybfzwndapppzv227xz.streamlit.app/
 
 A data science project on air pollution in Dhaka. It collects four years of hourly PM2.5 and weather data, studies how weather relates to pollution, forecasts daily PM2.5 for the next 1, 3 and 7 days with an expected range and an explanation of each prediction, and checks the data source against real ground sensors.
 
-![Project pipeline](images/pipeline.png)
+![Project pipeline](pipeline.png)
 
 ## Highlights
 
@@ -36,7 +36,7 @@ Location: Dhaka (23.81 N, 90.41 E). Period: 1 Sep 2022 to 30 Sep 2026, 35,784 ho
 
 ## Exploring the data (September 2026)
 
-![Daily PM2.5 in September 2026](images/sep2026_daily_pm25.png)
+![Daily PM2.5 in September 2026](sep2026_daily_pm25.png)
 
 Daily PM2.5 ranged from about 10 to 64 µg/m³ and moved in waves rather than staying flat, with peaks around 8, 19 and 28 September. On these 30 days PM2.5 correlated negatively with wind speed (-0.62) and rainfall (-0.55). Wind and rain are themselves correlated (0.61), so their effects cannot be separated, and 30 days is a small sample.
 
@@ -64,11 +64,11 @@ MAE in µg/m³ on the test set (lower is better). Features were added step by st
 
 XGBoost scored 6.9 overall, which is within noise of Random Forest on one test year (in winter it scored 9.9 vs 9.7 for Random Forest).
 
-![Feature importance](images/feature_importance.png)
+![Feature importance](feature_importance.png)
 
 ### Where the model helps
 
-![Error by month](images/error_by_month.png)
+![Error by month](error_by_month.png)
 
 Winter has the largest errors in absolute terms, but winter pollution is also much higher. Compared with the baseline, the model helped most in winter: for Dec-Mar, Random Forest scored 9.7 MAE against 12.6 for the baseline (about 23% better). In April and December the baseline was slightly better, and in May and June the two were equal.
 
@@ -76,7 +76,7 @@ Winter has the largest errors in absolute terms, but winter pollution is also mu
 
 To check the result does not depend on one test year, I trained on all earlier data and tested on the next year, three times:
 
-![Walk-forward validation](images/walk_forward_mae.png)
+![Walk-forward validation](walk_forward_mae.png)
 
 | Test year | Train days | Test days | Baseline | Linear | Random Forest |
 |---|---|---|---|---|---|
@@ -103,7 +103,7 @@ The Forecast tab uses [SHAP](https://github.com/shap/shap) to show how much each
 
 I compared the CAMS PM2.5 used in this project with three PM2.5 monitors on OpenAQ, using days with at least 18 valid hourly readings.
 
-![CAMS vs ground sensors](images/cams_vs_sensors.png)
+![CAMS vs ground sensors](cams_vs_sensors.png)
 
 | Sensor | Period | Common days | Daily correlation | Avg sensor | Avg CAMS | Bias (CAMS - sensor) |
 |---|---|---|---|---|---|---|
@@ -135,7 +135,7 @@ dhaka-aqi/
 ├── app.py            # Streamlit dashboard
 ├── pipeline.py       # data collection, features, models, SHAP
 ├── requirements.txt
-├── images/           # charts used in this README
+├── *.png             # charts used in this README
 └── README.md
 ```
 
@@ -145,4 +145,3 @@ dhaka-aqi/
 - Use real weather forecasts in the backtest instead of actual weather.
 - Add more cities (Chattogram, Sylhet) and compare them.
 - Add a classification view (probability of a high-pollution day) and hyperparameter search.
-
