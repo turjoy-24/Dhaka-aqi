@@ -18,21 +18,20 @@ def load_history():
 
 
 @st.cache_resource(ttl=6 * 3600)
-def build_model(_hourly):
-    d = p.make_training_data(_hourly)
-    return p.train_and_evaluate(d)
+def build_models(_hourly):
+    return p.train_all(_hourly)
 
 
-with st.spinner("Loading data and training the model..."):
+with st.spinner("Loading data and training the models..."):
     try:
         hourly = load_history()
-        model, test, pred, metrics, importance = build_model(hourly)
+        models = build_models(hourly)
     except Exception as e:
         st.error(f"Could not load data: {e}")
         st.stop()
 
 tab1, tab2, tab3, tab4 = st.tabs(
-    ["History", "Model results", "Rain vs pollution", "Tomorrow's forecast"]
+    ["History", "Model results", "Rain vs pollution", "Forecast"]
 )
 
 # ---------- Tab 1: history ----------
@@ -59,27 +58,39 @@ with tab1:
 # ---------- Tab 2: model ----------
 with tab2:
     st.write(
-        f"Time-based split: {metrics['train_days']} training days, "
-        f"{metrics['test_days']} test days. Metric: MAE (lower is better)."
+        "Time-based split (first 80% of days to train, last 20% to test). "
+        "MAE in µg/m³, lower is better. Baseline = \"future = today\"."
     )
-    table = pd.DataFrame(
-        {
-            "All test days": [metrics["baseline_mae"], metrics["model_mae"]],
-            "Winter (Dec-Mar)": [metrics["baseline_mae_winter"], metrics["model_mae_winter"]],
-        },
-        index=["Baseline (tomorrow = today)", "Random Forest"],
-    ).round(1)
-    st.dataframe(table)
+    rows = []
+    for h in p.HORIZONS:
+        m = models[h][3]
+        rows.append(
+            {
+                "Days ahead": h,
+                "Test days": m["test_days"],
+                "Baseline MAE": m["baseline_mae"],
+                "Model MAE": m["model_mae"],
+                "Improvement %": (1 - m["model_mae"] / m["baseline_mae"]) * 100,
+                "Winter baseline MAE": m["baseline_mae_winter"],
+                "Winter model MAE": m["model_mae_winter"],
+                "Range (low %)": m["range_low"] * 100,
+                "Range (high %)": m["range_high"] * 100,
+            }
+        )
+    st.dataframe(pd.DataFrame(rows).set_index("Days ahead").round(1))
 
-    st.subheader("Actual vs predicted (test period)")
-    chart = pd.DataFrame({"actual": test["target"], "predicted": pred})
-    st.line_chart(chart)
+    h = st.selectbox("Show details for forecast horizon (days ahead)", p.HORIZONS)
+    _, test, pred, _, importance = models[h]
+
+    st.subheader(f"Actual vs predicted, {h} day(s) ahead (test period)")
+    st.line_chart(pd.DataFrame({"actual": test["target"], "predicted": pred}))
 
     st.subheader("Feature importance")
     st.bar_chart(importance)
     st.caption(
-        "Backtest note: the model was given tomorrow's *actual* weather, so these "
-        "numbers are an upper limit. Real forecasts are less accurate."
+        "Backtest note: the model was given the *actual* weather of the target day, "
+        "so these numbers are an upper limit. Real weather forecasts are less accurate, "
+        "especially several days ahead."
     )
 
 # ---------- Tab 3: rain ----------
@@ -100,24 +111,42 @@ with tab3:
         "is already lower, so the overall table alone can mislead."
     )
 
-# ---------- Tab 4: tomorrow ----------
+# ---------- Tab 4: forecast ----------
 with tab4:
     st.write("Uses the last 10 days plus Open-Meteo's weather forecast.")
     try:
         fc = p.fetch_recent_forecast()
         today = pd.Timestamp.now(tz=p.TZ).tz_localize(None).normalize()
-        tomorrow_pm, today_pm = p.predict_tomorrow(model, fc, today)
-        c1, c2 = st.columns(2)
-        c1.metric("Today's PM2.5 (avg)", f"{today_pm:.1f}", p.aqi_category(today_pm), delta_color="off")
-        c2.metric("Tomorrow's PM2.5 (predicted)", f"{tomorrow_pm:.1f}",
-                  p.aqi_category(tomorrow_pm), delta_color="off")
-        low = tomorrow_pm * (1 + metrics["range_low"])
-        high = tomorrow_pm * (1 + metrics["range_high"])
-        st.write(f"**Expected range for tomorrow: {low:.0f} to {high:.0f} µg/m³**")
+
+        cols = st.columns(len(p.HORIZONS))
+        chart_rows = []
+        today_pm = None
+        for col, h in zip(cols, p.HORIZONS):
+            model_h, _, _, m_h, _ = models[h]
+            pm, today_pm = p.predict_ahead(model_h, fc, today, h)
+            low = pm * (1 + m_h["range_low"])
+            high = pm * (1 + m_h["range_high"])
+            day = today + pd.Timedelta(days=h)
+            col.metric(
+                f"{day.strftime('%a %d %b')} (+{h} day)",
+                f"{pm:.1f}",
+                p.aqi_category(pm),
+                delta_color="off",
+            )
+            col.caption(f"Expected range: {low:.0f} to {high:.0f} µg/m³")
+            chart_rows.append({"date": day, "predicted": pm, "low": low, "high": high})
+
+        st.metric("Today's PM2.5 (avg)", f"{today_pm:.1f}", p.aqi_category(today_pm), delta_color="off")
+
+        chart = pd.DataFrame(chart_rows).set_index("date")
+        chart.loc[today] = [today_pm, today_pm, today_pm]
+        st.line_chart(chart.sort_index())
+
         st.caption(
-            "The range comes from the model's past errors: about 80% of the time the "
-            "actual value fell inside a range like this. It is not a guarantee."
+            "Each range comes from that model's past errors on its test period; "
+            "about 80% of past actual values fell inside such a range. "
+            "Forecasts further ahead are less accurate (see the Model results tab). "
+            "Learning project, not an official forecast or health advice."
         )
-        st.caption("Learning project, not an official forecast or health advice.")
     except Exception as e:
         st.warning(f"Could not make a forecast right now: {e}")

@@ -2,7 +2,6 @@
 import pandas as pd
 import requests
 from sklearn.ensemble import RandomForestRegressor
-from sklearn.metrics import mean_absolute_error
 
 LAT, LON = 23.81, 90.41
 TZ = "Asia/Dhaka"
@@ -14,11 +13,19 @@ WEATHER_FORECAST_URL = "https://api.open-meteo.com/v1/forecast"
 AIR_VARS = ["pm2_5", "pm10"]
 WEATHER_VARS = ["temperature_2m", "relative_humidity_2m", "wind_speed_10m", "precipitation"]
 
-FEATURES = [
+HORIZONS = (1, 3, 7)  # days ahead
+
+BASE_FEATURES = [
     "pm2_5", "lag_1", "lag_2", "roll_7", "pm10",
     "temperature_2m", "relative_humidity_2m", "wind_speed_10m", "precipitation",
-    "month", "wind_tomorrow", "rain_tomorrow", "humid_tomorrow",
+    "month",
 ]
+
+
+def feature_names(h):
+    """Features for the model that predicts h days ahead.
+    Includes the weather on the target day (wind, rain, humidity)."""
+    return BASE_FEATURES + [f"wind_d{h}", f"rain_d{h}", f"humid_d{h}"]
 
 
 # ---------- 1. Data collection ----------
@@ -45,44 +52,47 @@ def fetch_history(start, end):
 
 
 def fetch_recent_forecast():
-    """Last 10 days + next 2 days (includes forecast weather)."""
-    air = _get_hourly(AIR_URL, AIR_VARS, past_days=10, forecast_days=3)
-    weather = _get_hourly(WEATHER_FORECAST_URL, WEATHER_VARS, past_days=10, forecast_days=3)
-    return air.join(weather, how="inner")
+    """Last 10 days of air quality + weather, plus weather forecast for the next ~9 days."""
+    air = _get_hourly(AIR_URL, AIR_VARS, past_days=10, forecast_days=2)
+    weather = _get_hourly(WEATHER_FORECAST_URL, WEATHER_VARS, past_days=10, forecast_days=9)
+    # weather goes further into the future than air quality, so keep all weather rows
+    return weather.join(air, how="left")
 
 
 # ---------- 2. Features ----------
 def make_features(hourly):
-    """Hourly -> one row per day, with lag / rolling / tomorrow-weather features."""
+    """Hourly -> one row per day, with lag / rolling / future-weather features."""
     d = hourly.resample("D").mean()
     d["month"] = d.index.month
     d["lag_1"] = d["pm2_5"].shift(1)
     d["lag_2"] = d["pm2_5"].shift(2)
     d["roll_7"] = d["pm2_5"].rolling(7).mean()
-    d["wind_tomorrow"] = d["wind_speed_10m"].shift(-1)
-    d["rain_tomorrow"] = d["precipitation"].shift(-1)
-    d["humid_tomorrow"] = d["relative_humidity_2m"].shift(-1)
+    for h in HORIZONS:
+        d[f"wind_d{h}"] = d["wind_speed_10m"].shift(-h)
+        d[f"rain_d{h}"] = d["precipitation"].shift(-h)
+        d[f"humid_d{h}"] = d["relative_humidity_2m"].shift(-h)
     return d
 
 
-def make_training_data(hourly):
+def make_training_data(hourly, h):
     d = make_features(hourly)
-    d["target"] = d["pm2_5"].shift(-1)  # tomorrow's PM2.5
-    return d.dropna(subset=FEATURES + ["target"])
+    d["target"] = d["pm2_5"].shift(-h)  # PM2.5 h days from now
+    return d.dropna(subset=feature_names(h) + ["target"])
 
 
 # ---------- 3. Model ----------
-def train_and_evaluate(d, train_frac=0.8):
-    """Time-based split (no shuffling), baseline vs Random Forest."""
+def train_and_evaluate(d, h, train_frac=0.8):
+    """Time-based split (no shuffling), baseline vs Random Forest, for horizon h."""
+    names = feature_names(h)
     split = int(len(d) * train_frac)
     train, test = d.iloc[:split], d.iloc[split:]
 
     model = RandomForestRegressor(n_estimators=200, random_state=42)
-    model.fit(train[FEATURES], train["target"])
-    pred = pd.Series(model.predict(test[FEATURES]), index=test.index)
+    model.fit(train[names], train["target"])
+    pred = pd.Series(model.predict(test[names]), index=test.index)
 
     winter = test.index.month.isin([12, 1, 2, 3])
-    base_err = (test["target"] - test["pm2_5"]).abs()  # "tomorrow = today"
+    base_err = (test["target"] - test["pm2_5"]).abs()  # "future = today"
     model_err = (test["target"] - pred).abs()
 
     # Prediction range: 10th and 90th percentile of the relative error
@@ -91,27 +101,34 @@ def train_and_evaluate(d, train_frac=0.8):
     range_low, range_high = rel.quantile(0.1), rel.quantile(0.9)
 
     metrics = {
+        "horizon": h,
         "range_low": float(range_low),
         "range_high": float(range_high),
         "train_days": len(train),
         "test_days": len(test),
-        "baseline_mae": base_err.mean(),
-        "model_mae": model_err.mean(),
-        "baseline_mae_winter": base_err[winter].mean(),
-        "model_mae_winter": model_err[winter].mean(),
+        "baseline_mae": float(base_err.mean()),
+        "model_mae": float(model_err.mean()),
+        "baseline_mae_winter": float(base_err[winter].mean()),
+        "model_mae_winter": float(model_err[winter].mean()),
     }
-    importance = pd.Series(model.feature_importances_, index=FEATURES).sort_values(ascending=False)
+    importance = pd.Series(model.feature_importances_, index=names).sort_values(ascending=False)
     return model, test, pred, metrics, importance
 
 
-def predict_tomorrow(model, forecast_hourly, today):
-    """Features for `today` (using forecast weather for tomorrow) -> tomorrow's PM2.5."""
+def train_all(hourly):
+    """One model per horizon: {1: (...), 3: (...), 7: (...)}."""
+    return {h: train_and_evaluate(make_training_data(hourly, h), h) for h in HORIZONS}
+
+
+def predict_ahead(model, forecast_hourly, today, h):
+    """Predict PM2.5 for `today + h days`. Returns (prediction, today's PM2.5)."""
     d = make_features(forecast_hourly)
     if today not in d.index:
         raise ValueError("Today's row is missing from the forecast data.")
-    row = d.loc[[today], FEATURES]
+    row = d.loc[[today], feature_names(h)]
     if row.isna().any(axis=None):
-        raise ValueError("Not enough data to build today's features.")
+        missing = list(row.columns[row.isna().any()])
+        raise ValueError(f"Not enough data to build today's features: {missing}")
     return float(model.predict(row)[0]), float(row["pm2_5"].iloc[0])
 
 
