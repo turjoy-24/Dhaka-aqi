@@ -22,6 +22,19 @@ Setup	Linear Regression	Random Forest	Baseline
 Today's weather + PM2.5	8.2	8.4	8.7
 + lag features (1 day, 2 days, 7-day average)	8.1	8.1	8.7
 + tomorrow's weather	7.4	7.1	8.7
++ ## CAMS vs a ground sensor
+
+I compared the Open-Meteo (CAMS) PM2.5 used in this project with the PM2.5 monitor "Dhaka" on OpenAQ (AirNow provider), using 840 days between Sep 2022 and Mar 2025 (days with at least 18 valid hours).
+
+| Measure | Value |
+|---|---|
+| Daily correlation | 0.79 |
+| Hourly correlation | 0.68 |
+| Average sensor PM2.5 | 104 µg/m³ |
+| Average CAMS PM2.5 | 50 µg/m³ |
+| Bias (CAMS - sensor) | -54 µg/m³ |
+
+CAMS follows the ups and downs of the sensor but reports roughly half the level (sensor/CAMS ratio about 1.6x to 2.7x depending on the month). The forecast errors above are measured against CAMS, not against the ground sensor, and the AQI categories in the dashboard are based on CAMS values, so they likely understate real pollution. This is a comparison with a single monitor in one part of the city, so part of the gap may come from CAMS averaging over a large grid cell.
 
 MAE in µg/m³, lower is better. XGBoost scored 6.9 overall, which is within noise of Random Forest on a single test year.
 
