@@ -1,4 +1,4 @@
-# Dhaka Air Quality (PM2.5): Analysis and 1/3/7-Day Forecast
+ Dhaka Air Quality (PM2.5): Analysis and 1/3/7-Day Forecast
 
 **Live dashboard:** https://dhaka-aqi-qjtzqybfzwndapppzv227xz.streamlit.app/
 
@@ -145,3 +145,4 @@ dhaka-aqi/
 - Use real weather forecasts in the backtest instead of actual weather.
 - Add more cities (Chattogram, Sylhet) and compare them.
 - Add a classification view (probability of a high-pollution day) and hyperparameter search.
+
