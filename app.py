@@ -142,6 +142,39 @@ with tab4:
         chart.loc[today] = [today_pm, today_pm, today_pm]
         st.line_chart(chart.sort_index())
 
+        # ---- Why this prediction? (SHAP) ----
+        st.subheader("Why this prediction?")
+        h_exp = st.selectbox(
+            "Explain the forecast for",
+            p.HORIZONS,
+            format_func=lambda x: f"+{x} day ({(today + pd.Timedelta(days=x)).strftime('%a %d %b')})",
+        )
+        try:
+            base, contrib, values, prediction = p.explain_ahead(models[h_exp][0], fc, today, h_exp)
+            table = pd.DataFrame(
+                {
+                    "Feature": [p.feature_label(n) for n in contrib.index],
+                    "Value": [round(float(values[n]), 1) for n in contrib.index],
+                    "Effect on prediction (µg/m³)": contrib.round(1).values,
+                }
+            )
+            table = table.reindex(table["Effect on prediction (µg/m³)"].abs().sort_values(ascending=False).index)
+            st.write(
+                f"Average prediction of the model: **{base:.1f}**. "
+                f"The features below push it up (+) or down (-) to today's prediction of **{prediction:.1f}**."
+            )
+            st.bar_chart(table.set_index("Feature")["Effect on prediction (µg/m³)"])
+            st.dataframe(table.reset_index(drop=True))
+            st.caption(
+                "SHAP shows how the model used each feature for this one prediction. "
+                "It describes the model, not what causes pollution, and related features "
+                "(for example today's PM2.5 and the 7-day average) share credit."
+            )
+        except ImportError:
+            st.info("Install the `shap` package to see the explanation.")
+        except Exception as e:
+            st.info(f"Could not explain this prediction: {e}")
+
         st.caption(
             "Each range comes from that model's past errors on its test period; "
             "about 80% of past actual values fell inside such a range. "

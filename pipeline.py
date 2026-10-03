@@ -120,8 +120,8 @@ def train_all(hourly):
     return {h: train_and_evaluate(make_training_data(hourly, h), h) for h in HORIZONS}
 
 
-def predict_ahead(model, forecast_hourly, today, h):
-    """Predict PM2.5 for `today + h days`. Returns (prediction, today's PM2.5)."""
+def _today_row(forecast_hourly, today, h):
+    """The single feature row for `today`, used to predict today + h days."""
     d = make_features(forecast_hourly)
     if today not in d.index:
         raise ValueError("Today's row is missing from the forecast data.")
@@ -129,7 +129,50 @@ def predict_ahead(model, forecast_hourly, today, h):
     if row.isna().any(axis=None):
         missing = list(row.columns[row.isna().any()])
         raise ValueError(f"Not enough data to build today's features: {missing}")
+    return row
+
+
+def predict_ahead(model, forecast_hourly, today, h):
+    """Predict PM2.5 for `today + h days`. Returns (prediction, today's PM2.5)."""
+    row = _today_row(forecast_hourly, today, h)
     return float(model.predict(row)[0]), float(row["pm2_5"].iloc[0])
+
+
+# ---------- 3b. Explaining one prediction (SHAP) ----------
+def feature_label(name):
+    labels = {
+        "pm2_5": "Today's PM2.5",
+        "lag_1": "PM2.5 yesterday",
+        "lag_2": "PM2.5 two days ago",
+        "roll_7": "7-day average PM2.5",
+        "pm10": "Today's PM10",
+        "temperature_2m": "Today's temperature",
+        "relative_humidity_2m": "Today's humidity",
+        "wind_speed_10m": "Today's wind speed",
+        "precipitation": "Today's rain",
+        "month": "Month of the year",
+    }
+    if name in labels:
+        return labels[name]
+    kind = name.split("_d")[0]
+    return {"wind": "Wind on target day", "rain": "Rain on target day",
+            "humid": "Humidity on target day"}[kind]
+
+
+def explain_ahead(model, forecast_hourly, today, h):
+    """SHAP values for one prediction.
+    Returns (base_value, contributions, feature_values, prediction), where
+    base_value + sum(contributions) = prediction."""
+    import numpy as np
+    import shap  # imported here so the rest of the app works without it
+
+    row = _today_row(forecast_hourly, today, h)
+    explainer = shap.TreeExplainer(model)
+    values = explainer.shap_values(row)
+    base = float(np.ravel(explainer.expected_value)[0])
+    contrib = pd.Series(np.ravel(values), index=row.columns)
+    prediction = float(model.predict(row)[0])
+    return base, contrib, row.iloc[0], prediction
 
 
 # ---------- 4. Rain vs pollution ----------
